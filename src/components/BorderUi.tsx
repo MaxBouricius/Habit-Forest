@@ -3,12 +3,12 @@ import { Image, LayoutChangeEvent, PixelRatio, View, ViewStyle } from 'react-nat
 
 const FRAME = 32;
 const CORNER = 10;
-const SCALE = 8;
+const SCALE = 16;
 const SOURCE = require('../../assets/ui/BorderUiGiant.png');
 
 // dp per art pixel, chosen so one art pixel = exactly SCALE physical screen pixels.
 // That way the image is never resampled, which is what caused the blur earlier.
-const ART = SCALE / PixelRatio.get();
+export const ART = SCALE / PixelRatio.get(); // dp per art pixel (1 art pixel = SCALE physical pixels)
 const C = CORNER * ART; // corner size in dp
 
 type SliceProps = {
