@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
+import { FONT, Text, pixelSize } from '../components/PixelText';
 import { router } from 'expo-router';
 import { Btn } from '../components/Btn';
 import { ART } from '../components/BorderUi';
@@ -42,7 +43,7 @@ export default function Plant() {
   return (
     <ScreenFrame>
       <ScrollView contentContainerStyle={{ padding: 8 }} keyboardShouldPersistTaps="handled">
-        <Text style={{ fontSize: 18, fontWeight: '700' }}>Plant a tree</Text>
+        <Text style={{ fontSize: 24, fontWeight: '700' }}>Plant a tree</Text>
 
         <Text style={{ marginTop: 16, fontWeight: '700' }}>Name</Text>
         <TextInput
@@ -58,7 +59,8 @@ export default function Plant() {
             borderColor: '#000',
             paddingHorizontal: 10,
             paddingVertical: 8,
-            fontSize: 16,
+            fontSize: pixelSize(16),
+            fontFamily: FONT,
           }}
         />
 

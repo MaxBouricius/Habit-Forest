@@ -1,4 +1,5 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
+import { Text } from './PixelText';
 
 type Props = {
   label: string;
@@ -21,7 +22,7 @@ export function Btn({ label, onPress, disabled, selected }: Props) {
         borderColor: selected ? '#000000' : 'transparent',
       })}
     >
-      <Text style={{ color: '#fff', fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: '#fff' }}>{label}</Text>
     </Pressable>
   );
 }

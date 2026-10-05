@@ -1,10 +1,10 @@
 export type PeriodUnit = 'day' | 'week' | 'month';
 
 export const RULES = {
-  dayStartHour: 5,            // a "day" runs 05:00 to 05:00 (week: Mon 05:00, month: 1st 05:00)
-  graceHours: 5,              // droplet shows during the last 5 h before a period closes
-  decayDays: 3,               // days without watering to reach each withering stage
-  maxWitherStage: 2,          // raise this when you draw more withering sprites
+  dayStartHour: 5,          // a "day" runs 05:00 to 05:00 (week: Mon 05:00, month: 1st 05:00)
+  graceHours: 5,            // droplet shows during the last 5 h before a period closes
+  decayDays: 3,             // days without watering to reach each withering stage
+  maxWitherStage: 2,        // raise this when you draw more withering sprites
   recoveryPeriodsPerStage: 2, // met periods needed to climb back one stage
 };
 
@@ -25,16 +25,16 @@ export type TreeInput = {
 
 export type TreeState = {
   phase: 'growing' | 'grown';
-  progress: number;           // met periods while growing (0..growthPeriods)
+  progress: number;          // met periods while growing (0..growthPeriods)
   growthPeriods: number;
-  witherStage: number;        // 0 = healthy, 1..maxWitherStage = withering
-  recoveryProgress: number;   // met periods toward the next recovery step
+  witherStage: number;       // 0 = healthy, 1..maxWitherStage = withering
+  recoveryProgress: number;  // met periods toward the next recovery step
   recoveryNeeded: number;
-  streak: number;             // consecutive met periods, including the current one if already met
+  streak: number;            // consecutive met periods, including the current one if already met
   bestStreak: number;
   period: { start: number; end: number; done: number; target: number };
-  thirsty: boolean;           // show the droplet
-  nextDecayAt: number | null; // when the next withering stage hits, if nothing changes
+  thirsty: boolean;          // show the droplet
+  nextDecayAt: number | null; // when the next withering stage will hit, if nothing changes
 };
 
 export function periodStart(t: number, unit: PeriodUnit): number {
@@ -113,6 +113,10 @@ export function evaluateTree(tree: TreeInput, now: number): TreeState {
         if (effStage < MAX) nextDecayAt = clockStart + (steps + 1) * DECAY_MS;
       }
       const shownStreak = streak + (metNow ? 1 : 0);
+      // Week/month trees allow one watering per 05:00-05:00 day. If today's is already used, the
+      // droplet would ask for something you can't do, so it stays hidden.
+      const dayStart = periodStart(now, 'day');
+      const wateredToday = period !== 'day' && waterings.some((t) => t >= dayStart);
       return {
         phase: grown ? 'grown' : 'growing',
         progress,
@@ -123,7 +127,7 @@ export function evaluateTree(tree: TreeInput, now: number): TreeState {
         streak: shownStreak,
         bestStreak: Math.max(best, shownStreak),
         period: { start, end, done, target },
-        thirsty: !metNow && now >= end - GRACE_MS,
+        thirsty: !metNow && !wateredToday && now >= end - GRACE_MS,
         nextDecayAt,
       };
     }
@@ -152,6 +156,7 @@ export function evaluateTree(tree: TreeInput, now: number): TreeState {
     start = end;
   }
 }
+
 // Can the user water this tree right now?
 // - never once this period's target is reached (extra waterings don't count)
 // - week/month trees: at most one watering per 05:00-05:00 day, so "3x a week" means 3 different days
@@ -161,4 +166,16 @@ export function canWater(tree: TreeInput, now: number): boolean {
   if (tree.period === 'day') return true;
   const dayStart = periodStart(now, 'day');
   return !tree.waterings.some((t) => t >= dayStart && t <= now);
+}
+
+// How the soil under a tree looks:
+// - wet:  nothing more can be watered right now (period done, or today's watering already used)
+// - damp: watered today, but the tree needs more waterings today (a daily tree with a target above 1)
+// - dry:  can be watered and hasn't been watered today
+export type Ground = 'dry' | 'damp' | 'wet';
+
+export function groundState(tree: TreeInput, now: number): Ground {
+  if (!canWater(tree, now)) return 'wet';
+  const s = evaluateTree(tree, now);
+  return tree.period === 'day' && s.period.done > 0 ? 'damp' : 'dry';
 }

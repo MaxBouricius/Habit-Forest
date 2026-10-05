@@ -1,4 +1,4 @@
-import { evaluateTree, TreeInput } from './treeRules';
+import { canWater, evaluateTree, groundState, TreeInput } from './treeRules';
 
 // September 2026: the 7th is a Monday, and no daylight-saving change falls inside the month.
 const at = (day: number, hour = 12, min = 0) => new Date(2026, 8, day, hour, min).getTime();
@@ -100,8 +100,71 @@ describe('weekly tree with a 3x target', () => {
     expect(evaluateTree(t, at(14, 6)).progress).toBe(0); // planting week isn't punished, and unmet
   });
 
+  test('no droplet if the weekly tree was already watered today, even in the last hours of the week', () => {
+    const t = { ...base, waterings: [at(8), at(13, 20)] }; // 2/3, watered Sunday evening
+    expect(evaluateTree(t, at(14, 0, 2)).period.done).toBe(2);
+    expect(evaluateTree(t, at(14, 0, 2)).thirsty).toBe(false);
+    const u = { ...base, waterings: [at(8), at(10)] }; // 2/3, nothing watered today
+    expect(evaluateTree(u, at(14, 0, 2)).thirsty).toBe(true);
+  });
+
   test('a met week counts as growth', () => {
     const t = { ...base, waterings: [at(8), at(10), at(12)] };
     expect(evaluateTree(t, at(14, 6)).progress).toBe(1);
+  });
+});
+
+describe('canWater', () => {
+  const weekly = (waterings: number[]) => ({ period: 'week' as const, target: 3, plantedAt: at(7, 6), waterings });
+
+  test('weekly 3x: only one watering per day, spread over different days', () => {
+    expect(canWater(weekly([]), at(8, 12))).toBe(true);
+    expect(canWater(weekly([at(8, 12)]), at(8, 18))).toBe(false); // same day
+    expect(canWater(weekly([at(8, 12)]), at(9, 12))).toBe(true); // next day
+  });
+
+  test('weekly 3x: blocked once the target is met', () => {
+    expect(canWater(weekly([at(8), at(9), at(10)]), at(11))).toBe(false);
+  });
+
+  test('the day boundary is 05:00, not midnight', () => {
+    const w = weekly([at(8, 3)]); // 03:00 belongs to the day that started the 7th at 05:00
+    expect(canWater(w, at(8, 4))).toBe(false);
+    expect(canWater(w, at(8, 6))).toBe(true);
+  });
+
+  test('daily tree with a target of 3 can be watered several times in one day', () => {
+    const d = (waterings: number[]) => ({ period: 'day' as const, target: 3, plantedAt: at(7, 6), waterings });
+    expect(canWater(d([at(7, 8), at(7, 10)]), at(7, 12))).toBe(true);
+    expect(canWater(d([at(7, 8), at(7, 10), at(7, 11)]), at(7, 12))).toBe(false);
+  });
+});
+
+describe('groundState', () => {
+  const daily3 = (waterings: number[]) => ({ period: 'day' as const, target: 3, plantedAt: at(7, 6), waterings });
+  const weekly3 = (waterings: number[]) => ({ period: 'week' as const, target: 3, plantedAt: at(7, 6), waterings });
+  const daily1 = (waterings: number[]) => ({ period: 'day' as const, target: 1, plantedAt: at(7, 6), waterings });
+
+  test('daily tree needing 3 waterings: dry, then damp, then wet', () => {
+    expect(groundState(daily3([]), at(8, 12))).toBe('dry');
+    expect(groundState(daily3([at(8, 8)]), at(8, 12))).toBe('damp');
+    expect(groundState(daily3([at(8, 8), at(8, 10)]), at(8, 12))).toBe('damp');
+    expect(groundState(daily3([at(8, 8), at(8, 10), at(8, 11)]), at(8, 12))).toBe('wet');
+  });
+
+  test('daily tree needing 1 watering: dry, then straight to wet', () => {
+    expect(groundState(daily1([]), at(8, 12))).toBe('dry');
+    expect(groundState(daily1([at(8, 8)]), at(8, 12))).toBe('wet');
+  });
+
+  test('weekly tree is never damp: watered today means wet, yesterday only means dry', () => {
+    expect(groundState(weekly3([at(8, 8)]), at(8, 12))).toBe('wet');
+    expect(groundState(weekly3([at(8, 8)]), at(9, 12))).toBe('dry');
+  });
+
+  test('resets to dry when the 05:00 day rolls over', () => {
+    const w = daily3([at(8, 8), at(8, 10)]);
+    expect(groundState(w, at(9, 4))).toBe('damp'); // still the same day
+    expect(groundState(w, at(9, 6))).toBe('dry');
   });
 });
