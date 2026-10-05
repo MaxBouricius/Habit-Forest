@@ -33,5 +33,5 @@ export function useParkName() {
     [db]
   );
 
-  return { name, loaded, save };
+    return { name, loaded, save, reload };
 }

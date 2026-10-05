@@ -14,10 +14,23 @@ const pine = {
   ],
 };
 
-// First filled pixel row of each sprite (0 = top of the 32-row canvas), same order as above.
-// Used to float the droplet just above the tree. Update these if you redraw the sprites.
-const TOP_ROWS: Record<string, { growing: number[]; grown: number[] }> = {
-  pine: { growing: [23, 19, 8], grown: [0, 0, 0] },
+// The highest pixel of each sprite, same order as above: its row and column on the 32x32 canvas
+// (0,0 = top left). When a row has several pixels at the top, use the rightmost one.
+// The droplet is placed relative to this point. Update these if you redraw the sprites.
+type Tip = { row: number; col: number };
+const TIPS: Record<string, { growing: Tip[]; grown: Tip[] }> = {
+  pine: {
+    growing: [
+      { row: 23, col: 17 },
+      { row: 19, col: 17 },
+      { row: 8, col: 18 },
+    ],
+    grown: [
+      { row: 0, col: 18 }, // healthy
+      { row: 0, col: 16 }, // withering 1
+      { row: 0, col: 16 }, // withering 2
+    ],
+  },
 };
 
 const SPECIES: Record<string, typeof pine> = { pine };
@@ -32,8 +45,8 @@ export function spriteFor(species: string, s: TreeState) {
   return set.grown[Math.min(s.witherStage, set.grown.length - 1)];
 }
 
-export function spriteTop(species: string, s: TreeState) {
-  const rows = TOP_ROWS[species] ?? TOP_ROWS.pine;
-  if (s.phase === 'growing') return rows.growing[growingIndex(s)];
-  return rows.grown[Math.min(s.witherStage, rows.grown.length - 1)];
+export function spriteTip(species: string, s: TreeState): Tip {
+  const tips = TIPS[species] ?? TIPS.pine;
+  if (s.phase === 'growing') return tips.growing[growingIndex(s)];
+  return tips.grown[Math.min(s.witherStage, tips.grown.length - 1)];
 }

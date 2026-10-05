@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { canWater, evaluateTree, Ground, groundState, PeriodUnit, TreeState } from '../game/treeRules';
+import { canWater, evaluateTree, Ground, groundState, periodStart, PeriodUnit, TreeState } from '../game/treeRules';
 
 export type TreeRow = {
   id: number;
@@ -15,12 +15,22 @@ export type TreeRow = {
 
 export type Tree = TreeRow & { state: TreeState; canWater: boolean; ground: Ground };
 
+// TEST TOOL: 00:30 at the end of the current 05:00-to-05:00 day, so the droplet window can be seen.
+// If it is already past that moment (say it is 02:00 now), the real time is used.
+function simulatedNight(now: number) {
+  const d = new Date(periodStart(now, 'day'));
+  d.setDate(d.getDate() + 1);
+  d.setHours(0, 30, 0, 0);
+  return Math.max(now, d.getTime());
+}
+
 export function useForest() {
   const db = useSQLiteContext();
   const [rows, setRows] = useState<TreeRow[]>([]);
   const [waterings, setWaterings] = useState<Record<number, number[]>>({});
   const [now, setNow] = useState(() => Date.now());
   const [loaded, setLoaded] = useState(false);
+  const [simNight, setSimNight] = useState(false); // TEST TOOL: pretend it is just after midnight
 
   const reload = useCallback(async () => {
     const trees = await db.getAllAsync<TreeRow>(
@@ -57,6 +67,8 @@ export function useForest() {
     };
   }, []);
 
+  const viewNow = simNight ? simulatedNight(now) : now;
+
   const trees: Tree[] = useMemo(
     () =>
       rows.map((r) => {
@@ -68,12 +80,12 @@ export function useForest() {
         };
         return {
           ...r,
-          state: evaluateTree(input, now),
-          canWater: canWater(input, now),
-          ground: groundState(input, now),
+          state: evaluateTree(input, viewNow),
+          canWater: canWater(input, viewNow),
+          ground: groundState(input, viewNow),
         };
       }),
-    [rows, waterings, now]
+    [rows, waterings, viewNow]
   );
 
   const plant = useCallback(
@@ -89,6 +101,7 @@ export function useForest() {
 
   const water = useCallback(
     async (treeId: number) => {
+      if (simNight) return false; // the simulated clock is view-only
       const r = rows.find((x) => x.id === treeId);
       if (!r) return false;
       const input = {
@@ -103,7 +116,7 @@ export function useForest() {
       await reload();
       return true;
     },
-    [db, reload, rows, waterings]
+    [db, reload, rows, waterings, simNight]
   );
 
   const archive = useCallback(
@@ -124,5 +137,31 @@ export function useForest() {
     [db, reload]
   );
 
-  return { trees, loaded, plant, water, archive, rename };
+  // TEST TOOL: pretend `days` more days passed with the tree fully watered every day.
+  const advance = useCallback(
+    async (treeId: number, days: number) => {
+      if (simNight) return; // the simulated clock is view-only
+      const r = rows.find((x) => x.id === treeId);
+      if (!r) return;
+      const shift = days * 24 * 3600 * 1000;
+      const todayStart = periodStart(Date.now(), 'day');
+      const perDay = r.period === 'day' ? r.target : 1;
+      await db.withTransactionAsync(async () => {
+        await db.runAsync('UPDATE trees SET planted_at = planted_at - ? WHERE id = ?', [shift, treeId]);
+        await db.runAsync('UPDATE waterings SET watered_at = watered_at - ? WHERE tree_id = ?', [shift, treeId]);
+        for (let k = 1; k <= days; k++) {
+          const d = new Date(todayStart);
+          d.setDate(d.getDate() - k);
+          const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0).getTime();
+          for (let i = 0; i < perDay; i++) {
+            await db.runAsync('INSERT INTO waterings (tree_id, watered_at) VALUES (?, ?)', [treeId, noon + i * 60000]);
+          }
+        }
+      });
+      await reload();
+    },
+    [db, reload, rows, simNight]
+  );
+
+   return { trees, loaded, plant, water, archive, rename, advance, simNight, setSimNight, reload };
 }
