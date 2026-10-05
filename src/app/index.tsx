@@ -3,21 +3,48 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { Btn } from '../components/Btn';
 import { Panel } from '../components/Panel';
+import { ParkPlaque, PLAQUE_H } from '../components/ParkPlaque';
 import { Text } from '../components/PixelText';
-import { ScreenFrame } from '../components/ScreenFrame';
+import { headerInset, ScreenFrame } from '../components/ScreenFrame';
 import { TreePanel } from '../components/TreePanel';
 import { TreeSprite } from '../components/TreeSprite';
+import { WelcomePanel } from '../components/WelcomePanel';
 import { useForest } from '../db/useForest';
+import { useParkName } from '../db/useParkName';
 
 export default function Index() {
   const { trees, loaded, water, archive, rename } = useForest();
+  const park = useParkName();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const selected = trees.find((t) => t.id === selectedId) ?? null;
 
   return (
-    <ScreenFrame>
-      <ScrollView contentContainerStyle={{ padding: 8 }}>
-        <Text style={{ fontSize: 24 }}>Forest</Text>
+    <ScreenFrame
+      header={<ParkPlaque name={park.name ?? 'Forest'} />}
+      overlay={
+        <>
+          <Panel visible={!!selected} onClose={() => setSelectedId(null)}>
+            {selected && (
+              <TreePanel
+                tree={selected}
+                onWater={() => water(selected.id)}
+                onRename={(name) => rename(selected.id, name)}
+                onArchive={async () => {
+                  await archive(selected.id);
+                  setSelectedId(null);
+                }}
+              />
+            )}
+          </Panel>
+
+          {/* Shown on any launch where the park has no name yet, and can't be dismissed */}
+          <Panel visible={park.loaded && park.name === null}>
+            <WelcomePanel onSave={park.save} />
+          </Panel>
+        </>
+      }
+    >
+            <ScrollView contentContainerStyle={{ padding: 8, paddingTop: headerInset(PLAQUE_H), paddingBottom: 16 }}>
         <View style={{ flexDirection: 'row' }}>
           <Btn label="Plant a tree" onPress={() => router.push('/plant')} />
         </View>
@@ -46,20 +73,6 @@ export default function Index() {
           ))}
         </View>
       </ScrollView>
-
-      <Panel visible={!!selected} onClose={() => setSelectedId(null)}>
-        {selected && (
-          <TreePanel
-            tree={selected}
-            onWater={() => water(selected.id)}
-            onRename={(name) => rename(selected.id, name)}
-            onArchive={async () => {
-              await archive(selected.id);
-              setSelectedId(null);
-            }}
-          />
-        )}
-      </Panel>
     </ScreenFrame>
   );
 }

@@ -1,6 +1,6 @@
 import { type SQLiteDatabase } from 'expo-sqlite';
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await db.execAsync('PRAGMA foreign_keys = ON;');
@@ -34,8 +34,16 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     version = 1;
   }
 
-  // Future changes go here, e.g.:
-  // if (version === 1) { await db.execAsync('ALTER TABLE ...'); version = 2; }
+  if (version === 1) {
+    // Version 2: a small key/value table for app settings (the park name lives here)
+    await db.execAsync(`
+      CREATE TABLE settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    version = 2;
+  }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
