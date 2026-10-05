@@ -63,7 +63,7 @@ Effort of what is still to do: **(1)** short task **(2)** medium task **(3)** bi
 ## Credits
 
 ### Testers
-Jowi,Goku,Son
+Jowi,Goku,Son,Lin
 
 ### Font
 Alagard by Hewett Tsoi
