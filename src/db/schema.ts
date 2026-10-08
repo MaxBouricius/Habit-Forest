@@ -1,6 +1,19 @@
 import { type SQLiteDatabase } from 'expo-sqlite';
+import { assignMissing } from '../game/grid';
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
+
+// Gives every active tree without a valid spot a free cell on the map.
+// Called after the v3 migration, and meant to be called again after a restore.
+export async function placeUnplacedTrees(db: SQLiteDatabase) {
+  const rows = await db.getAllAsync<{ id: number; grid_x: number | null; grid_y: number | null }>(
+    'SELECT id, grid_x, grid_y FROM trees WHERE archived_at IS NULL ORDER BY id'
+  );
+  const moves = assignMissing(rows.map((r) => ({ id: r.id, gridX: r.grid_x, gridY: r.grid_y })));
+  for (const m of moves) {
+    await db.runAsync('UPDATE trees SET grid_x = ?, grid_y = ? WHERE id = ?', [m.x, m.y, m.id]);
+  }
+}
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
   await db.execAsync('PRAGMA foreign_keys = ON;');
@@ -43,6 +56,16 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
       );
     `);
     version = 2;
+  }
+
+  if (version === 2) {
+    // Version 3: where each tree stands on the world map (null = not placed yet)
+    await db.execAsync(`
+      ALTER TABLE trees ADD COLUMN grid_x INTEGER;
+      ALTER TABLE trees ADD COLUMN grid_y INTEGER;
+    `);
+    await placeUnplacedTrees(db);
+    version = 3;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

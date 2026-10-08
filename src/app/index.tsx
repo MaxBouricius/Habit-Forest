@@ -1,39 +1,41 @@
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { router } from "expo-router";
 import { Btn } from "../components/Btn";
 import { Panel } from "../components/Panel";
 import { ParkPlaque, PLAQUE_H } from "../components/ParkPlaque";
-import { Text } from "../components/PixelText";
-import { headerInset, ScreenFrame } from "../components/ScreenFrame";
+import { FRAME_INSET, headerInset, ScreenFrame } from "../components/ScreenFrame";
 import { TreePanel } from "../components/TreePanel";
-import { TreeSprite } from "../components/TreeSprite";
 import { WelcomePanel } from "../components/WelcomePanel";
+import { WorldMap } from "../components/WorldMap";
 import { useForest } from "../db/useForest";
 import { useParkName } from "../db/useParkName";
-import { SettingsButton } from "../components/SettingsButton";
+import { PlantButton, SettingsButton } from "../components/SettingsButton";
 import { SettingsPanel } from "../components/SettingsPanel";
 export default function Index() {
 	const {
 		trees,
-		loaded,
 		water,
 		archive,
 		rename,
 		advance,
+		move,
 		simNight,
 		setSimNight,
 		reload,
 	} = useForest();
 	const park = useParkName();
 	const [selectedId, setSelectedId] = useState<number | null>(null);
+	const [movingId, setMovingId] = useState<number | null>(null); // tree picked up by the Move button
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const selected = trees.find((t) => t.id === selectedId) ?? null;
 
 	return (
 		<ScreenFrame
+			fill
 			header={<ParkPlaque name={park.name ?? "Forest"} />}
 			bottomRight={<SettingsButton onPress={() => setSettingsOpen(true)} />}
+			bottomLeft={<PlantButton onPress={() => router.push("/plant")} />}
 			overlay={
 				<>
 					<Panel visible={!!selected} onClose={() => setSelectedId(null)}>
@@ -47,6 +49,10 @@ export default function Index() {
 									setSelectedId(null);
 								}}
 								onAdvance={() => advance(selected.id, 3)}
+								onMove={() => {
+									setMovingId(selected.id);
+									setSelectedId(null);
+								}}
 								frozen={simNight}
 							/>
 						)}
@@ -67,53 +73,42 @@ export default function Index() {
 					</Panel>
 				</>
 			}>
-			<ScrollView
-				contentContainerStyle={{
+			<WorldMap
+				trees={trees}
+				movingId={movingId}
+				onTreePress={(id) => {
+					if (movingId === null) setSelectedId(id);
+					else if (movingId === id) setMovingId(null); // tap the picked-up tree again to cancel
+				}}
+				onCellPress={async (x, y) => {
+					if (movingId === null) return;
+					if (await move(movingId, x, y)) setMovingId(null);
+				}}
+			/>
+
+			{/* Buttons float over the map, just under the park plaque */}
+			<View
+				pointerEvents="box-none"
+				style={{
+					position: "absolute",
+					top: FRAME_INSET + headerInset(PLAQUE_H),
+					left: FRAME_INSET,
+					right: FRAME_INSET,
+					flexDirection: "row",
+					flexWrap: "wrap",
 					padding: 8,
-					paddingTop: headerInset(PLAQUE_H),
-					paddingBottom: 64,
 				}}>
-				<View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-					<Btn label="Plant a tree" onPress={() => router.push("/plant")} />
-					{__DEV__ && (
+				{movingId !== null ? (
+					<Btn label="Cancel" onPress={() => setMovingId(null)} />
+				) : (
+					__DEV__ && (
 						<Btn
 							label={simNight ? "Time: 00:30" : "Time: normal"}
 							onPress={() => setSimNight((s) => !s)}
 						/>
-					)}
-				</View>
-
-				{loaded && trees.length === 0 && (
-					<Text style={{ marginTop: 16 }}>
-						No trees yet. Plant your first one!
-					</Text>
+					)
 				)}
-
-				<View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-					{trees.map((t) => (
-						<Pressable
-							key={t.id}
-							onPress={() => setSelectedId(t.id)}
-							style={{ width: "50%", alignItems: "center", marginBottom: 16 }}>
-							<TreeSprite
-								species={t.species}
-								state={t.state}
-								ground={t.ground}
-							/>
-							<Text numberOfLines={1} style={{ marginTop: 4 }}>
-								{t.name}
-							</Text>
-							<Text>
-								{t.state.phase === "growing"
-									? `${t.state.progress}/${t.state.growthPeriods}`
-									: t.state.witherStage > 0
-										? "Withering"
-										: "Grown"}
-							</Text>
-						</Pressable>
-					))}
-				</View>
-			</ScrollView>
+			</View>
 		</ScreenFrame>
 	);
 }
