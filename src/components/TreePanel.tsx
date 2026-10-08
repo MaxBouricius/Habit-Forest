@@ -98,6 +98,7 @@ type Props = {
 	onArchive: () => void;
 	onRename: (name: string) => void;
 	onAdvance: () => void;
+	onMove?: () => void; // leave out to keep the Move button disabled
 	frozen?: boolean; // simulated clock is on: watering is disabled
 };
 
@@ -107,6 +108,7 @@ export function TreePanel({
 	onArchive,
 	onRename,
 	onAdvance,
+	onMove,
 	frozen,
 }: Props) {
 	const { height } = useWindowDimensions();
@@ -287,7 +289,7 @@ export function TreePanel({
 					flexWrap: "wrap",
 					justifyContent: "center",
 				}}>
-				<Btn label="Move" disabled onPress={() => {}} />
+				<Btn label="Move" disabled={!onMove} onPress={() => onMove?.()} />
 				<Btn label="Archive" onPress={confirmArchive} />
 			</View>
 		</ScrollView>

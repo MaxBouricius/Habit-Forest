@@ -18,8 +18,8 @@ const GROUND = {
 	damp: require("../../assets/ground/ground-dampUpscale.png"),
 	wet: require("../../assets/ground/ground-wetUpscale.png"),
 };
-const GROUND_TOP = (CANVAS - 1 - TRUNK_ROW) * ROW;
-const GROUND_LEFT = ((CANVAS - TILE_W) / 2) * ROW;
+export const GROUND_TOP = (CANVAS - 1 - TRUNK_ROW) * ROW;
+export const GROUND_LEFT = ((CANVAS - TILE_W) / 2) * ROW;
 // Total height of a tree plus its ground, which hangs below the tree's own canvas.
 export const SPRITE_HEIGHT = Math.max(CANVAS * ROW, GROUND_TOP + TILE_H * ROW);
 
@@ -27,24 +27,25 @@ type Props = {
 	species: string;
 	state: TreeState;
 	ground?: Ground; // 'dry' | 'damp' | 'wet', or leave out for no ground tile
+	scale?: number; // draws the tree and ground this many times bigger (whole numbers); the droplet keeps its size
 };
 
-export function TreeSprite({ species, state, ground }: Props) {
+export function TreeSprite({ species, state, ground, scale = 1 }: Props) {
 	const tip = spriteTip(species, state); // the highest pixel of the sprite that is showing
 	const showGround = ground !== undefined;
 
 	return (
-		<View style={{ width: SIZE, height: showGround ? SPRITE_HEIGHT : SIZE }}>
+		<View style={{ width: SIZE * scale, height: (showGround ? SPRITE_HEIGHT : SIZE) * scale }}>
 			{showGround && (
 				<Image
 					source={GROUND[ground]}
 					fadeDuration={0}
 					style={{
 						position: "absolute",
-						left: GROUND_LEFT,
-						top: GROUND_TOP,
-						width: TILE_W * ROW,
-						height: TILE_H * ROW,
+						left: GROUND_LEFT * scale,
+						top: GROUND_TOP * scale,
+						width: TILE_W * ROW * scale,
+						height: TILE_H * ROW * scale,
 					}}
 				/>
 			)}
@@ -55,8 +56,8 @@ export function TreeSprite({ species, state, ground }: Props) {
 					position: "absolute",
 					left: 0,
 					top: 0,
-					width: SIZE,
-					height: SIZE,
+					width: SIZE * scale,
+					height: SIZE * scale,
 				}}
 			/>
 			{state.thirsty && (
@@ -64,8 +65,8 @@ export function TreeSprite({ species, state, ground }: Props) {
 					pointerEvents="none"
 					style={{
 						position: "absolute",
-						left: (tip.col + 1 + DROP_OFFSET_X) * ROW,
-						top: Math.max(0, tip.row * ROW - DROP_HEIGHT - DROP_OFFSET_Y * ROW),
+						left: (tip.col + 1 + DROP_OFFSET_X) * ROW * scale,
+						top: Math.max(0, (tip.row - DROP_OFFSET_Y) * ROW * scale - DROP_HEIGHT),
 					}}>
 					<Droplet />
 				</View>

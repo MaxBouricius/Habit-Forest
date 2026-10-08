@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { firstFreeCell, inBounds, isFree } from '../game/grid';
 import { canWater, evaluateTree, Ground, groundState, periodStart, PeriodUnit, TreeState } from '../game/treeRules';
 
 export type TreeRow = {
@@ -11,6 +12,8 @@ export type TreeRow = {
   period: PeriodUnit;
   target: number;
   plantedAt: number;
+  gridX: number | null;
+  gridY: number | null;
 };
 
 export type Tree = TreeRow & { state: TreeState; canWater: boolean; ground: Ground };
@@ -34,7 +37,7 @@ export function useForest() {
 
   const reload = useCallback(async () => {
     const trees = await db.getAllAsync<TreeRow>(
-      `SELECT id, name, species, period, target, planted_at AS plantedAt
+      `SELECT id, name, species, period, target, planted_at AS plantedAt, grid_x AS gridX, grid_y AS gridY
        FROM trees WHERE archived_at IS NULL ORDER BY planted_at`
     );
     const logs = await db.getAllAsync<{ tree_id: number; watered_at: number }>(
@@ -90,13 +93,30 @@ export function useForest() {
 
   const plant = useCallback(
     async (name: string, species: string, period: PeriodUnit, target: number) => {
+      // New trees go to the first free cell; null (not placed) if the map is full.
+      const taken = rows.flatMap((r) => (r.gridX != null && r.gridY != null ? [{ x: r.gridX, y: r.gridY }] : []));
+      const cell = firstFreeCell(taken);
       await db.runAsync(
-        'INSERT INTO trees (name, species, period, target, planted_at) VALUES (?, ?, ?, ?, ?)',
-        [name, species, period, target, Date.now()]
+        'INSERT INTO trees (name, species, period, target, planted_at, grid_x, grid_y) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name, species, period, target, Date.now(), cell?.x ?? null, cell?.y ?? null]
       );
       await reload();
     },
-    [db, reload]
+    [db, reload, rows]
+  );
+
+  // Moves a tree to a free cell. Returns false if the cell is outside the map or taken.
+  const move = useCallback(
+    async (treeId: number, x: number, y: number) => {
+      const taken = rows.flatMap((r) =>
+        r.id !== treeId && r.gridX != null && r.gridY != null ? [{ x: r.gridX, y: r.gridY }] : []
+      );
+      if (!inBounds({ x, y }) || !isFree({ x, y }, taken)) return false;
+      await db.runAsync('UPDATE trees SET grid_x = ?, grid_y = ? WHERE id = ?', [x, y, treeId]);
+      await reload();
+      return true;
+    },
+    [db, reload, rows]
   );
 
   const water = useCallback(
@@ -163,5 +183,5 @@ export function useForest() {
     [db, reload, rows, simNight]
   );
 
-   return { trees, loaded, plant, water, archive, rename, advance, simNight, setSimNight, reload };
+  return { trees, loaded, plant, move, water, archive, rename, advance, simNight, setSimNight, reload };
 }
