@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAppFonts } from '../components/PixelText';
 import { migrateDbIfNeeded } from '../db/schema';
 
@@ -17,8 +18,10 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SQLiteProvider databaseName="forest.db" onInit={migrateDbIfNeeded}>
-      <Stack screenOptions={{ headerShown: false }} />
-    </SQLiteProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SQLiteProvider databaseName="forest.db" onInit={migrateDbIfNeeded}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </SQLiteProvider>
+    </GestureHandlerRootView>
   );
 }

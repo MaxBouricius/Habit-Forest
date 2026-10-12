@@ -4,7 +4,8 @@ import { assignMissing } from '../game/grid';
 const DATABASE_VERSION = 3;
 
 // Gives every active tree without a valid spot a free cell on the map.
-// Called after the v3 migration, and meant to be called again after a restore.
+// Runs on every start (after the migrations), so trees outside a resized map get a new spot;
+// meant to be called again after a restore.
 export async function placeUnplacedTrees(db: SQLiteDatabase) {
   const rows = await db.getAllAsync<{ id: number; grid_x: number | null; grid_y: number | null }>(
     'SELECT id, grid_x, grid_y FROM trees WHERE archived_at IS NULL ORDER BY id'
@@ -20,7 +21,10 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
 
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
-  if (version >= DATABASE_VERSION) return;
+  if (version >= DATABASE_VERSION) {
+    await placeUnplacedTrees(db);
+    return;
+  }
 
   if (version === 0) {
     await db.execAsync(`

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { firstFreeCell, inBounds, isFree } from '../game/grid';
+import { Cell, firstFreeCell, inBounds, isFree } from '../game/grid';
 import { canWater, evaluateTree, Ground, groundState, periodStart, PeriodUnit, TreeState } from '../game/treeRules';
 
 export type TreeRow = {
@@ -17,6 +17,9 @@ export type TreeRow = {
 };
 
 export type Tree = TreeRow & { state: TreeState; canWater: boolean; ground: Ground };
+
+// A tree that has been filled in but not planted yet: the map holds it while you pick a cell.
+export type PendingTree = { name: string; species: string; period: PeriodUnit; target: number };
 
 // TEST TOOL: 00:30 at the end of the current 05:00-to-05:00 day, so the droplet window can be seen.
 // If it is already past that moment (say it is 02:00 now), the real time is used.
@@ -92,10 +95,10 @@ export function useForest() {
   );
 
   const plant = useCallback(
-    async (name: string, species: string, period: PeriodUnit, target: number) => {
-      // New trees go to the first free cell; null (not placed) if the map is full.
+    async (name: string, species: string, period: PeriodUnit, target: number, at?: Cell) => {
+      // Planted on `at` if that cell is free, otherwise on the first free cell; null (not placed) if the map is full.
       const taken = rows.flatMap((r) => (r.gridX != null && r.gridY != null ? [{ x: r.gridX, y: r.gridY }] : []));
-      const cell = firstFreeCell(taken);
+      const cell = at && isFree(at, taken) ? at : firstFreeCell(taken);
       await db.runAsync(
         'INSERT INTO trees (name, species, period, target, planted_at, grid_x, grid_y) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [name, species, period, target, Date.now(), cell?.x ?? null, cell?.y ?? null]

@@ -6,7 +6,8 @@ import { Btn } from '../components/Btn';
 import { ART } from '../components/BorderUi';
 import { ScreenFrame } from '../components/ScreenFrame';
 import { WaterBar } from '../components/WaterBar';
-import { useForest } from '../db/useForest';
+import { PendingTree, useForest } from '../db/useForest';
+import { firstFreeCell } from '../game/grid';
 import { GROWTH_PERIODS, PeriodUnit } from '../game/treeRules';
 
 // max = highest waterings-per-period offered. Week/month trees allow one watering per day,
@@ -18,7 +19,7 @@ const PERIODS: { id: PeriodUnit; label: string; per: string; unit: string; max: 
 ];
 
 export default function Plant() {
-  const { plant } = useForest();
+  const { plant, trees } = useForest();
   const [name, setName] = useState('');
   const [period, setPeriod] = useState<PeriodUnit>('day');
   const [target, setTarget] = useState(1);
@@ -33,11 +34,19 @@ export default function Plant() {
     setTarget((t) => Math.min(t, max));
   };
 
+  // Back to the map, where you pick the spot; the tree is only planted once you tap a cell.
+  // If the map is full there is nothing to pick, so it is planted right away without a spot.
   const submit = async () => {
     if (!canPlant) return;
-    setSaving(true);
-    await plant(name.trim(), 'pine', period, target);
-    router.back();
+    const taken = trees.flatMap((t) => (t.gridX != null && t.gridY != null ? [{ x: t.gridX, y: t.gridY }] : []));
+    if (firstFreeCell(taken) === null) {
+      setSaving(true);
+      await plant(name.trim(), 'pine', period, target);
+      router.back();
+      return;
+    }
+    const pending: PendingTree = { name: name.trim(), species: 'pine', period, target };
+    router.dismissTo({ pathname: '/', params: { plant: JSON.stringify(pending) } });
   };
 
   return (

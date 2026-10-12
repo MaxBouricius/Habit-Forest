@@ -1,7 +1,7 @@
 // Tree placement on the world map. Pure logic, no React or database in here.
 
-export const MAP_COLS = 6;
-export const MAP_ROWS = 8;
+export const MAP_COLS = 12;
+export const MAP_ROWS = 16;
 
 export type Cell = { x: number; y: number };
 

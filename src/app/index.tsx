@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { View } from "react-native";
-import { router } from "expo-router";
+import { useEffect, useState } from "react";
+import { BackHandler, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { Btn } from "../components/Btn";
 import { Panel } from "../components/Panel";
 import { ParkPlaque, PLAQUE_H } from "../components/ParkPlaque";
@@ -8,7 +8,7 @@ import { FRAME_INSET, headerInset, ScreenFrame } from "../components/ScreenFrame
 import { TreePanel } from "../components/TreePanel";
 import { WelcomePanel } from "../components/WelcomePanel";
 import { WorldMap } from "../components/WorldMap";
-import { useForest } from "../db/useForest";
+import { PendingTree, useForest } from "../db/useForest";
 import { useParkName } from "../db/useParkName";
 import { PlantButton, SettingsButton } from "../components/SettingsButton";
 import { SettingsPanel } from "../components/SettingsPanel";
@@ -20,6 +20,7 @@ export default function Index() {
 		rename,
 		advance,
 		move,
+		plant,
 		simNight,
 		setSimNight,
 		reload,
@@ -27,6 +28,32 @@ export default function Index() {
 	const park = useParkName();
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 	const [movingId, setMovingId] = useState<number | null>(null); // tree picked up by the Move button
+	const [pending, setPending] = useState<PendingTree | null>(null); // new tree waiting for a spot
+	const params = useLocalSearchParams<{ plant?: string }>();
+
+	// The plant screen sends the new tree here; you pick its cell on the map.
+	useEffect(() => {
+		if (!params.plant) return;
+		setPending(JSON.parse(params.plant));
+		setMovingId(null);
+		setSelectedId(null);
+		router.setParams({ plant: undefined });
+	}, [params.plant]);
+
+	// While picking a cell (placing a new tree or moving one), the phone's back button cancels, like Cancel.
+	const choosing = movingId !== null || pending !== null;
+	const cancelChoosing = () => {
+		setMovingId(null);
+		setPending(null);
+	};
+	useEffect(() => {
+		if (!choosing) return;
+		const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+			cancelChoosing();
+			return true;
+		});
+		return () => sub.remove();
+	}, [choosing]);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const selected = trees.find((t) => t.id === selectedId) ?? null;
 
@@ -76,13 +103,17 @@ export default function Index() {
 			<WorldMap
 				trees={trees}
 				movingId={movingId}
+				choosing={choosing}
 				onTreePress={(id) => {
-					if (movingId === null) setSelectedId(id);
-					else if (movingId === id) setMovingId(null); // tap the picked-up tree again to cancel
+					if (movingId === null && pending === null) setSelectedId(id);
 				}}
 				onCellPress={async (x, y) => {
-					if (movingId === null) return;
-					if (await move(movingId, x, y)) setMovingId(null);
+					if (pending) {
+						setPending(null);
+						await plant(pending.name, pending.species, pending.period, pending.target, { x, y });
+					} else if (movingId !== null) {
+						if (await move(movingId, x, y)) setMovingId(null);
+					}
 				}}
 			/>
 
@@ -98,8 +129,8 @@ export default function Index() {
 					flexWrap: "wrap",
 					padding: 8,
 				}}>
-				{movingId !== null ? (
-					<Btn label="Cancel" onPress={() => setMovingId(null)} />
+				{choosing ? (
+					<Btn label="Cancel" onPress={cancelChoosing} />
 				) : (
 					__DEV__ && (
 						<Btn
